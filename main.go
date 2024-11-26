@@ -143,25 +143,7 @@ func escapeSecretContent(content string) string {
 
 func main() {
 	// Check if a profile argument is passed
-	var profile string
-	for _, arg := range os.Args[1:] { // Start from os.Args[1] to skip the program name
-		if strings.HasPrefix(arg, "profile=") {
-			profile = strings.TrimPrefix(arg, "profile=")
-		}
-	}
-
-	// Use DEFAULT profile if none is provided
-	if profile == "" {
-		profile = "DEFAULT"
-	}
-
-	// Load the OCI configuration using the specified profile
-	configFilePath := "~/.oci/config"
-	configProvider, err := common.ConfigurationProviderFromFileWithProfile(configFilePath, profile, "")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading OCI config with profile '%s': %v\n", profile, err)
-		os.Exit(1)
-	}
+	configProvider := common.DefaultConfigProvider()
 
 	// Verify the configuration by retrieving the tenancy OCID
 	tenancyID, err := configProvider.TenancyOCID()
@@ -172,7 +154,7 @@ func main() {
 
 	// Print the tenancy OCID to verify connection
 	fmt.Printf("\n")
-	fmt.Printf("Successfully connected to OCI account using profile '%s'. Tenancy OCID: %s\n", profile, tenancyID)
+	fmt.Printf("Successfully connected to OCI account using profile '%s'. Tenancy OCID: %s\n", tenancyID)
 	fmt.Printf("\n")
 
 	var compartmentName string
