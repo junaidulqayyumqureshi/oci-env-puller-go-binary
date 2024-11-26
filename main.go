@@ -145,10 +145,10 @@ func escapeSecretContent(content string) string {
 
 func main() {
     // Create Instance Principal Configuration Provider
-    configProvider, err := auth.InstancePrincipalConfigurationProvider()
-    if err != nil {
-        log.Fatalf("Error creating Instance Principal configuration: %v", err)
-    }
+    configProvider, err := auth.ResourcePrincipalConfigurationProvider()
+	if err != nil {
+		log.Fatalf("Error creating Resource Principal configuration: %v", err)
+	}
 
     // Create an Identity client
     client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
