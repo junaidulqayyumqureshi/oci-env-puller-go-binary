@@ -1,21 +1,20 @@
 package main
 
 import (
-	"context"
-	"encoding/base64"
-	"fmt"
-	"log"
-	"regexp"
+    "context"
+    "fmt"
+    "log"
+	"os"
 	"strings"
+	"regexp"
+	"encoding/base64"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
-	"github.com/oracle/oci-go-sdk/v65/common/auth"
-	"github.com/oracle/oci-go-sdk/v65/example/helpers"
-	"github.com/oracle/oci-go-sdk/v65/identity"
+    "github.com/oracle/oci-go-sdk/v65/common/auth"
+    "github.com/oracle/oci-go-sdk/v65/identity"
 	"github.com/oracle/oci-go-sdk/v65/keymanagement"
 	"github.com/oracle/oci-go-sdk/v65/secrets"
 	"github.com/oracle/oci-go-sdk/v65/vault"
-
 )
 
 func GetVaultByName(configProvider common.ConfigurationProvider, vaultName string, compartmentID string) (*keymanagement.VaultSummary, error) {
@@ -43,40 +42,6 @@ func GetVaultByName(configProvider common.ConfigurationProvider, vaultName strin
 	}
 
 	return nil, fmt.Errorf("vault with name '%s' not found in compartment '%s'", vaultName, compartmentID)
-}
-
-func CompartmentIDByName(configProvider common.ConfigurationProvider, compartmentName string) (string, error) {
-	client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
-	if err != nil {
-		return "", fmt.Errorf("failed to create Identity client: %v", err)
-	}
-
-	// Get the tenancy OCID from the configuration
-	tenancyID, err := configProvider.TenancyOCID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get tenancy OCID: %v", err)
-	}
-
-	// List all compartments in the tenancy
-	req := identity.ListCompartmentsRequest{
-		CompartmentId:          common.String(tenancyID),
-		AccessLevel:            identity.ListCompartmentsAccessLevelAccessible,
-		CompartmentIdInSubtree: common.Bool(true),
-	}
-
-	resp, err := client.ListCompartments(context.Background(), req)
-	if err != nil {
-		return "", fmt.Errorf("failed to list compartments: %v", err)
-	}
-
-	// Search for the compartment by name
-	for _, compartment := range resp.Items {
-		if *compartment.Name == compartmentName && compartment.LifecycleState == identity.CompartmentLifecycleStateActive {
-			return *compartment.Id, nil
-		}
-	}
-
-	return "", fmt.Errorf("compartment with name '%s' not found", compartmentName)
 }
 
 func GetSecretsFromVault(configProvider common.ConfigurationProvider, compartmentId string, vaultId string) error {
@@ -132,6 +97,40 @@ func GetSecretsFromVault(configProvider common.ConfigurationProvider, compartmen
 	return nil
 }
 
+func CompartmentIDByName(configProvider common.ConfigurationProvider, compartmentName string) (string, error) {
+	client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		return "", fmt.Errorf("failed to create Identity client: %v", err)
+	}
+
+	// Get the tenancy OCID from the configuration
+	tenancyID, err := configProvider.TenancyOCID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get tenancy OCID: %v", err)
+	}
+
+	// List all compartments in the tenancy
+	req := identity.ListCompartmentsRequest{
+		CompartmentId:          common.String(tenancyID),
+		AccessLevel:            identity.ListCompartmentsAccessLevelAccessible,
+		CompartmentIdInSubtree: common.Bool(true),
+	}
+
+	resp, err := client.ListCompartments(context.Background(), req)
+	if err != nil {
+		return "", fmt.Errorf("failed to list compartments: %v", err)
+	}
+
+	// Search for the compartment by name
+	for _, compartment := range resp.Items {
+		if *compartment.Name == compartmentName && compartment.LifecycleState == identity.CompartmentLifecycleStateActive {
+			return *compartment.Id, nil
+		}
+	}
+
+	return "", fmt.Errorf("compartment with name '%s' not found", compartmentName)
+}
+
 // sanitizeSecretName replaces invalid characters in a secret name with underscores.
 func sanitizeSecretName(secretName string) string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9_]`)
@@ -145,31 +144,52 @@ func escapeSecretContent(content string) string {
 }
 
 func main() {
-	// Check if a profile argument is passed
+    // Create Instance Principal Configuration Provider
+    configProvider, err := auth.InstancePrincipalConfigurationProvider()
+    if err != nil {
+        log.Fatalf("Error creating Instance Principal configuration: %v", err)
+    }
 
-	provider, err := auth.InstancePrincipalConfigurationProvider()
+    // Create an Identity client
+    client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
+    if err != nil {
+        log.Fatalf("Error creating Identity client: %v", err)
+    }
+	client.SetRegion(string(common.RegionLHR))
+
+	compartmentName := os.Getenv("compartmentName")
+	if compartmentName == "" {
+		fmt.Println("Error: compartmentName environment variable not set")
+		os.Exit(1)
+	}
+
+	compartmentID, err := CompartmentIDByName(configProvider, compartmentName)
 	if err != nil {
-		log.Fatalf("Error creating Instance Principal configuration: %v", err)
+		fmt.Fprintf(os.Stderr, "Error retrieving compartment ID: %v\n", err)
+		os.Exit(1)
 	}
 
-	client, err := identity.NewIdentityClientWithConfigurationProvider(provider)
+	// fmt.Printf("Successfully retrieved Compartment ID for '%s': %s\n", compartmentName, compartmentID)
+	// fmt.Printf("\n")
+
+	vaultName := os.Getenv("vaultName")
+	if vaultName == "" {
+		fmt.Println("Error: vaultName environment variable not set")
+		os.Exit(1)
+	}
+
+	vault, err := GetVaultByName(configProvider, vaultName, compartmentID)
 	if err != nil {
-		log.Fatalf("Error creating Identity client: %v", err)
+		fmt.Fprintf(os.Stderr, "Error retrieving vault ID: %v\n", err)
+		os.Exit(1)
 	}
 
-	tenancyID := helpers.RootCompartmentID()
-	fmt.Printf("Tenancy id is %s", *tenancyID)
+	// fmt.Printf("Successfully retrieved Vault ID for '%s': %s\n", vaultName, *vault.Id)
+	// fmt.Printf("\n")
 
-	request := identity.ListAvailabilityDomainsRequest{
-		CompartmentId: tenancyID,
-	}
-	
-	response, err := client.ListAvailabilityDomains(context.Background(), request)
+	err = GetSecretsFromVault(configProvider, compartmentID, *vault.Id)
 	if err != nil {
-		log.Fatalf("Error listing availability domains: %v", err)
-	}
-	
-	for _, ad := range response.Items {
-		fmt.Printf("Availability Domain: %s\n", *ad.Name)
+		fmt.Fprintf(os.Stderr, "Error retrieving secrets: %v\n", err)
+		os.Exit(1)
 	}
 }
