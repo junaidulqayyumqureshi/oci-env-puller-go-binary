@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
-	"log"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/common/auth"
@@ -148,22 +148,28 @@ func main() {
 	// Check if a profile argument is passed
 
 	provider, err := auth.InstancePrincipalConfigurationProvider()
-	helpers.FatalIfError(err)
-
-	tenancyID := helpers.RootCompartmentID()
-	request := identity.ListAvailabilityDomainsRequest{
-		CompartmentId: tenancyID,
+	if err != nil {
+		log.Fatalf("Error creating Instance Principal configuration: %v", err)
 	}
 
 	client, err := identity.NewIdentityClientWithConfigurationProvider(provider)
-	// Override the region, this is an optional step.
-	// the InstancePrincipalsConfigurationProvider defaults to the region
-	// in which the compute instance is currently running
-	client.SetRegion(string(common.RegionLHR))
+	if err != nil {
+		log.Fatalf("Error creating Identity client: %v", err)
+	}
 
-	r, err := client.ListAvailabilityDomains(context.Background(), request)
-	helpers.FatalIfError(err)
+	tenancyID := helpers.RootCompartmentID()
+	fmt.Printf("Tenancy id is %s", *tenancyID)
 
-	log.Printf("list of available domains: %v", r.Items)
-	fmt.Println("Done")
+	request := identity.ListAvailabilityDomainsRequest{
+		CompartmentId: tenancyID,
+	}
+	
+	response, err := client.ListAvailabilityDomains(context.Background(), request)
+	if err != nil {
+		log.Fatalf("Error listing availability domains: %v", err)
+	}
+	
+	for _, ad := range response.Items {
+		fmt.Printf("Availability Domain: %s\n", *ad.Name)
+	}
 }
