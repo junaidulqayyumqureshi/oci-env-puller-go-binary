@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/common/auth"
+	"github.com/oracle/oci-go-sdk/v65/example/helpers"
 	"github.com/oracle/oci-go-sdk/v65/identity"
 	"github.com/oracle/oci-go-sdk/v65/keymanagement"
 	"github.com/oracle/oci-go-sdk/v65/secrets"
@@ -143,16 +145,12 @@ func escapeSecretContent(content string) string {
 
 func main() {
 	// Check if a profile argument is passed
-	configProvider := common.DefaultConfigProvider()
 
-	// Verify the configuration by retrieving the tenancy OCID
-	tenancyID, err := configProvider.TenancyOCID()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error retrieving tenancy OCID: %v\n", err)
-		os.Exit(1)
-	}
+	configProvider, err := auth.InstancePrincipalConfigurationProvider()
+	helpers.FatalIfError(err)
 
-	// Print the tenancy OCID to verify connection
+	tenancyID := helpers.RootCompartmentID()
+
 	fmt.Printf("\n")
 	fmt.Printf("Successfully connected to OCI account using profile '%s'. Tenancy OCID: %s\n", tenancyID)
 	fmt.Printf("\n")
