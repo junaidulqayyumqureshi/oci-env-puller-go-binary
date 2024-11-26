@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
+	"log"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/common/auth"
@@ -15,6 +15,7 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/keymanagement"
 	"github.com/oracle/oci-go-sdk/v65/secrets"
 	"github.com/oracle/oci-go-sdk/v65/vault"
+
 )
 
 func GetVaultByName(configProvider common.ConfigurationProvider, vaultName string, compartmentID string) (*keymanagement.VaultSummary, error) {
@@ -146,50 +147,23 @@ func escapeSecretContent(content string) string {
 func main() {
 	// Check if a profile argument is passed
 
-	configProvider, err := auth.InstancePrincipalConfigurationProvider()
+	provider, err := auth.InstancePrincipalConfigurationProvider()
 	helpers.FatalIfError(err)
 
 	tenancyID := helpers.RootCompartmentID()
-
-	fmt.Printf("\n")
-	fmt.Printf("Successfully connected to OCI account using profile '%s'. Tenancy OCID: %s\n", tenancyID)
-	fmt.Printf("\n")
-
-	var compartmentName string
-	for _, arg := range os.Args[1:] { // Start from os.Args[1] to skip the program name
-		if strings.HasPrefix(arg, "compartmentName=") {
-			compartmentName = strings.TrimPrefix(arg, "compartmentName=")
-		}
+	request := identity.ListAvailabilityDomainsRequest{
+		CompartmentId: tenancyID,
 	}
 
-	compartmentID, err := CompartmentIDByName(configProvider, compartmentName)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error retrieving compartment ID: %v\n", err)
-		os.Exit(1)
-	}
+	client, err := identity.NewIdentityClientWithConfigurationProvider(provider)
+	// Override the region, this is an optional step.
+	// the InstancePrincipalsConfigurationProvider defaults to the region
+	// in which the compute instance is currently running
+	client.SetRegion(string(common.RegionLHR))
 
-	fmt.Printf("Successfully retrieved Compartment ID for '%s': %s\n", compartmentName, compartmentID)
-	fmt.Printf("\n")
+	r, err := client.ListAvailabilityDomains(context.Background(), request)
+	helpers.FatalIfError(err)
 
-	var vaultName string
-	for _, arg := range os.Args[1:] { // Start from os.Args[1] to skip the program name
-		if strings.HasPrefix(arg, "vaultName=") {
-			vaultName = strings.TrimPrefix(arg, "vaultName=")
-		}
-	}
-
-	vault, err := GetVaultByName(configProvider, vaultName, compartmentID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error retrieving vault ID: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Successfully retrieved Vault ID for '%s': %s\n", vaultName, vault.Id)
-	fmt.Printf("\n")
-
-	err = GetSecretsFromVault(configProvider, compartmentID, *vault.Id)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error retrieving secrets: %v\n", err)
-		os.Exit(1)
-	}
+	log.Printf("list of available domains: %v", r.Items)
+	fmt.Println("Done")
 }
