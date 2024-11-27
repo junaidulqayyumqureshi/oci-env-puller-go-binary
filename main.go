@@ -116,13 +116,8 @@ func getCompartmentID() (string, error) {
 	tokenBytes, err := ioutil.ReadFile(tokenPath)
 	token := string(tokenBytes)
 
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid JWT token format")
-	}
-
 	// Decode the payload (the second part of the JWT)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	payload, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
 	}
