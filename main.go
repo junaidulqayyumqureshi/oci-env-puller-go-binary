@@ -143,10 +143,8 @@ func getCompartmentID() (string, error) {
         return "", fmt.Errorf("invalid JWT token format: expected 3 parts, got %d", len(parts))
     }
 
-    // Decode the payload (the second part of the JWT)
     payloadSegment := parts[1]
 
-    // Add padding if necessary
     missingPadding := (4 - len(payloadSegment)%4) % 4
     payloadSegment += strings.Repeat("=", missingPadding)
 
@@ -154,8 +152,6 @@ func getCompartmentID() (string, error) {
     if err != nil {
         return "", fmt.Errorf("failed to decode JWT payload: %w", err)
     }
-
-    // *** Print decoded payload ***
 
     // Parse the JSON payload into a map
     var claims map[string]interface{}
@@ -168,16 +164,10 @@ func getCompartmentID() (string, error) {
         return "", fmt.Errorf("res_compartment not found in token claims")
     }
 
-    // *** Print the compartment ID ***
-
     return compartmentID, nil
 }
 
 func main() {
-    // Create Instance Principal Configuration Provider
-	// InstancePrincipalConfigurationProvider
-	// ResourcePrincipalConfigurationProvider
-	// sudo rm main.go && sudo nano main,go && vaultName=surepay-uat-kms-vault-app go run main.go
     configProvider, err := auth.ResourcePrincipalConfigurationProvider()
 	if err != nil {
 		log.Fatalf("Error creating Resource Principal configuration: %v", err)
@@ -199,9 +189,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error retrieving vault ID: %v\n", err)
 		os.Exit(1)
 	}
-
-	// fmt.Printf("Successfully retrieved Vault ID for '%s': %s\n", vaultName, *vault.Id)
-	// fmt.Printf("\n")
 
 	err = GetSecretsFromVault(configProvider, compartmentID, *vault.Id)
 	if err != nil {
