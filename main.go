@@ -66,8 +66,15 @@ func GetSecretsFromVault(configProvider common.ConfigurationProvider, compartmen
 		return fmt.Errorf("failed to list secrets: %v", err)
 	}
 
-	// Iterate over each secret and fetch its value
+	var activeSecrets []vault.SecretSummary
 	for _, secret := range listSecretsResponse.Items {
+		if secret.LifecycleState == vault.SecretSummaryLifecycleStateActive {
+			activeSecrets = append(activeSecrets, secret)
+		}
+	}
+
+	// Iterate over each secret and fetch its value
+	for _, secret := range activeSecrets {
 		// Fetch the secret bundle
 		getSecretBundleRequest := secrets.GetSecretBundleRequest{
 			SecretId: secret.Id,
@@ -168,14 +175,27 @@ func getCompartmentID() (string, error) {
 }
 
 func main() {
-    configProvider, err := auth.ResourcePrincipalConfigurationProvider()
-	if err != nil {
-		log.Fatalf("Error creating Resource Principal configuration: %v", err)
-	}
-
-	compartmentID, err := getCompartmentID()
-	if err != nil {
-		log.Fatalf("Failed to get compartment ID: %v", err)
+	var configProvider common.ConfigurationProvider
+	var compartmentID string
+	var err error
+	
+    envCompartmentID := os.Getenv("COMPARTMENT_ID")
+	if envCompartmentID != "" {
+		// Use DefaultProvider if COMPARTMENT_ID is provided
+		configProvider = common.DefaultConfigProvider()
+		compartmentID = envCompartmentID
+		// fmt.Println("Using DefaultConfigProvider and COMPARTMENT_ID from environment")
+	} else {
+		// Use ResourcePrincipalConfigurationProvider otherwise
+		configProvider, err = auth.ResourcePrincipalConfigurationProvider()
+		if err != nil {
+			log.Fatalf("Error creating Resource Principal configuration: %v", err)
+		}
+		compartmentID, err = getCompartmentID()
+		if err != nil {
+			log.Fatalf("Failed to get compartment ID: %v", err)
+		}
+		// fmt.Println("Using ResourcePrincipalConfigurationProvider")
 	}
 
 	vaultName := os.Getenv("vaultName")
