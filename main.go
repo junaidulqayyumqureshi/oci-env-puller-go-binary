@@ -8,13 +8,16 @@ import (
 	"strings"
 	"regexp"
 	"encoding/base64"
+	"io/ioutil"
+	"net/http"
+	"encoding/json"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
     "github.com/oracle/oci-go-sdk/v65/common/auth"
-    "github.com/oracle/oci-go-sdk/v65/identity"
 	"github.com/oracle/oci-go-sdk/v65/keymanagement"
 	"github.com/oracle/oci-go-sdk/v65/secrets"
 	"github.com/oracle/oci-go-sdk/v65/vault"
+	"github.com/oracle/oci-go-sdk/v65/core"
 )
 
 func GetVaultByName(configProvider common.ConfigurationProvider, vaultName string, compartmentID string) (*keymanagement.VaultSummary, error) {
@@ -97,40 +100,6 @@ func GetSecretsFromVault(configProvider common.ConfigurationProvider, compartmen
 	return nil
 }
 
-func CompartmentIDByName(configProvider common.ConfigurationProvider, compartmentName string) (string, error) {
-	client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
-	if err != nil {
-		return "", fmt.Errorf("failed to create Identity client: %v", err)
-	}
-
-	// Get the tenancy OCID from the configuration
-	tenancyID, err := configProvider.TenancyOCID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get tenancy OCID: %v", err)
-	}
-
-	// List all compartments in the tenancy
-	req := identity.ListCompartmentsRequest{
-		CompartmentId:          common.String(tenancyID),
-		AccessLevel:            identity.ListCompartmentsAccessLevelAccessible,
-		CompartmentIdInSubtree: common.Bool(true),
-	}
-
-	resp, err := client.ListCompartments(context.Background(), req)
-	if err != nil {
-		return "", fmt.Errorf("failed to list compartments: %v", err)
-	}
-
-	// Search for the compartment by name
-	for _, compartment := range resp.Items {
-		if *compartment.Name == compartmentName && compartment.LifecycleState == identity.CompartmentLifecycleStateActive {
-			return *compartment.Id, nil
-		}
-	}
-
-	return "", fmt.Errorf("compartment with name '%s' not found", compartmentName)
-}
-
 // sanitizeSecretName replaces invalid characters in a secret name with underscores.
 func sanitizeSecretName(secretName string) string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9_]`)
@@ -143,34 +112,77 @@ func escapeSecretContent(content string) string {
 	return strings.ReplaceAll(content, "'", "\\'")
 }
 
+type InstanceMetadata struct {
+	InstanceID string `json:"id"`
+}
+
+// getInstanceMetadata fetches metadata of the current instance from the OCI Metadata service
+func getInstanceMetadata() (*InstanceMetadata, error) {
+	const metadataURL = "http://169.254.169.254/opc/v2/instance/"
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", metadataURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer Oracle")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var metadata InstanceMetadata
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
+	}
+
+	return &metadata, nil
+}
+
 func main() {
     // Create Instance Principal Configuration Provider
+	// InstancePrincipalConfigurationProvider
+	// ResourcePrincipalConfigurationProvider
+	// sudo rm main.go && sudo nano main,go && vaultName=surepay-uat-kms-vault-app go run main.go
     configProvider, err := auth.ResourcePrincipalConfigurationProvider()
 	if err != nil {
 		log.Fatalf("Error creating Resource Principal configuration: %v", err)
 	}
 
-    // Create an Identity client
-    client, err := identity.NewIdentityClientWithConfigurationProvider(configProvider)
-    if err != nil {
-        log.Fatalf("Error creating Identity client: %v", err)
-    }
-	client.SetRegion(string(common.RegionLHR))
-
-	compartmentName := os.Getenv("compartmentName")
-	if compartmentName == "" {
-		fmt.Println("Error: compartmentName environment variable not set")
-		os.Exit(1)
-	}
-
-	compartmentID, err := CompartmentIDByName(configProvider, compartmentName)
+    instanceMetadata, err := getInstanceMetadata()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error retrieving compartment ID: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Failed to get instance metadata: %v", err)
+	}
+	instanceID := instanceMetadata.InstanceID
+
+	// Create Compute Client
+	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
+	if err != nil {
+		log.Fatalf("Failed to create compute client: %v", err)
 	}
 
-	// fmt.Printf("Successfully retrieved Compartment ID for '%s': %s\n", compartmentName, compartmentID)
-	// fmt.Printf("\n")
+	ctx := context.Background()
+	req := core.GetInstanceRequest{
+		InstanceId: &instanceID,
+	}
+
+	instanceDetails, err := computeClient.GetInstance(ctx, req)
+	if err != nil {
+		log.Fatalf("Failed to fetch instance details: %v", err)
+	}
+
+	compartmentID := *instanceDetails.CompartmentId
 
 	vaultName := os.Getenv("vaultName")
 	if vaultName == "" {
