@@ -119,6 +119,7 @@ func getCompartmentID() (string, error) {
 	// Parse the JWT token
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
+		fmt.Printf(token)
 		return "", fmt.Errorf("invalid JWT token format")
 	}
 
