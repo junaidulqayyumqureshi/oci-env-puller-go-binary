@@ -112,29 +112,12 @@ func escapeSecretContent(content string) string {
 
 func getCompartmentID() (string, error) {
 	// Retrieve the Resource Principal Token (RPT) from the environment variable
-	token := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPST")
-	if token == "" {
-		return "", fmt.Errorf("OCI_RESOURCE_PRINCIPAL_RPST environment variable not set")
-	}
+	tokenPath := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPST")
+	tokenBytes, err := ioutil.ReadFile(tokenPath)
+	token := string(tokenBytes)
 
-	// Parse the JWT token
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		fmt.Printf("Token below")
-		fmt.Printf(token)
-		fmt.Printf("Token above")
-
-		tokenBytes, err := ioutil.ReadFile(token)
-		if err != nil {
-			return "", fmt.Errorf("failed to read session token file: %w", err)
-		}
-
-		token2 := string(tokenBytes)
-
-		fmt.Printf("Token 2 ------")
-		fmt.Printf(token2)
-		fmt.Printf("Token 3 ------")
-
 		return "", fmt.Errorf("invalid JWT token format")
 	}
 
