@@ -111,9 +111,9 @@ func escapeSecretContent(content string) string {
 
 func getCompartmentID() (string, error) {
 	// Retrieve the Resource Principal Token (RPT) from the environment variable
-	token := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPT")
+	token := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPST")
 	if token == "" {
-		return "", fmt.Errorf("OCI_RESOURCE_PRINCIPAL_RPT environment variable not set")
+		return "", fmt.Errorf("OCI_RESOURCE_PRINCIPAL_RPST environment variable not set")
 	}
 
 	// Parse the JWT token
