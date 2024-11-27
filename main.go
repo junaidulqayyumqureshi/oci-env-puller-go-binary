@@ -8,16 +8,12 @@ import (
 	"strings"
 	"regexp"
 	"encoding/base64"
-	"io/ioutil"
-	"net/http"
-	"encoding/json"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
     "github.com/oracle/oci-go-sdk/v65/common/auth"
 	"github.com/oracle/oci-go-sdk/v65/keymanagement"
 	"github.com/oracle/oci-go-sdk/v65/secrets"
 	"github.com/oracle/oci-go-sdk/v65/vault"
-	"github.com/oracle/oci-go-sdk/v65/core"
 )
 
 func GetVaultByName(configProvider common.ConfigurationProvider, vaultName string, compartmentID string) (*keymanagement.VaultSummary, error) {
@@ -112,42 +108,13 @@ func escapeSecretContent(content string) string {
 	return strings.ReplaceAll(content, "'", "\\'")
 }
 
-type InstanceMetadata struct {
-	InstanceID string `json:"id"`
-}
-
-// getInstanceMetadata fetches metadata of the current instance from the OCI Metadata service
-func getInstanceMetadata() (*InstanceMetadata, error) {
-	const metadataURL = "http://169.254.169.254/opc/v2/instance/"
-	client := &http.Client{}
-
-	req, err := http.NewRequest("GET", metadataURL, nil)
+func getCompartmentID(provider common.ConfigurationProvider) (string, error) {
+	// Use the default compartment ID available to the provider
+	compartmentID, err := provider.TenancyOCID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return "", fmt.Errorf("failed to retrieve compartment ID: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer Oracle")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get metadata: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var metadata InstanceMetadata
-	if err := json.Unmarshal(body, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
-	}
-
-	return &metadata, nil
+	return compartmentID, nil
 }
 
 func main() {
@@ -160,29 +127,10 @@ func main() {
 		log.Fatalf("Error creating Resource Principal configuration: %v", err)
 	}
 
-    instanceMetadata, err := getInstanceMetadata()
+	compartmentID, err := getCompartmentID(configProvider)
 	if err != nil {
-		log.Fatalf("Failed to get instance metadata: %v", err)
+		log.Fatalf("Failed to get compartment ID: %v", err)
 	}
-	instanceID := instanceMetadata.InstanceID
-
-	// Create Compute Client
-	computeClient, err := core.NewComputeClientWithConfigurationProvider(configProvider)
-	if err != nil {
-		log.Fatalf("Failed to create compute client: %v", err)
-	}
-
-	ctx := context.Background()
-	req := core.GetInstanceRequest{
-		InstanceId: &instanceID,
-	}
-
-	instanceDetails, err := computeClient.GetInstance(ctx, req)
-	if err != nil {
-		log.Fatalf("Failed to fetch instance details: %v", err)
-	}
-
-	compartmentID := *instanceDetails.CompartmentId
 
 	vaultName := os.Getenv("vaultName")
 	if vaultName == "" {
