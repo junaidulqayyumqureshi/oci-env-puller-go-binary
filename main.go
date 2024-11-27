@@ -176,10 +176,10 @@ func getCompartmentID() (string, error) {
     }
     fmt.Println("**********")
 
-    // Extract the "compartmentId" claim
-    compartmentID, ok := claims["compartmentId"].(string)
+    // Extract the "res_compartment" claim
+    compartmentID, ok := claims["res_compartment"].(string)
     if !ok {
-        return "", fmt.Errorf("compartmentId not found in token claims")
+        return "", fmt.Errorf("res_compartment not found in token claims")
     }
 
     // *** Print the compartment ID ***
