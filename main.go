@@ -135,6 +135,11 @@ func getCompartmentID() (string, error) {
     // Clean up the token string
     token = strings.TrimSpace(token)
 
+    // *** Print the token ***
+    fmt.Println("Token:")
+    fmt.Println(token)
+    fmt.Println("**********")
+
     // Split the token into its three parts
     parts := strings.Split(token, ".")
     if len(parts) != 3 {
@@ -153,17 +158,34 @@ func getCompartmentID() (string, error) {
         return "", fmt.Errorf("failed to decode JWT payload: %w", err)
     }
 
+    // *** Print decoded payload ***
+    fmt.Println("Decoded Payload:")
+    fmt.Println(string(payloadBytes))
+    fmt.Println("**********")
+
     // Parse the JSON payload into a map
     var claims map[string]interface{}
     if err := json.Unmarshal(payloadBytes, &claims); err != nil {
         return "", fmt.Errorf("failed to unmarshal JWT payload: %w", err)
     }
 
+    // *** Print the claims ***
+    fmt.Println("Claims:")
+    for key, value := range claims {
+        fmt.Printf("%s: %v\n", key, value)
+    }
+    fmt.Println("**********")
+
     // Extract the "compartmentId" claim
     compartmentID, ok := claims["compartmentId"].(string)
     if !ok {
         return "", fmt.Errorf("compartmentId not found in token claims")
     }
+
+    // *** Print the compartment ID ***
+    fmt.Println("Compartment ID:")
+    fmt.Println(compartmentID)
+    fmt.Println("**********")
 
     return compartmentID, nil
 }
