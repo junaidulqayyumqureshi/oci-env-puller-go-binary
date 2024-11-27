@@ -8,6 +8,7 @@ import (
 	"strings"
 	"regexp"
 	"encoding/base64"
+	"encoding/json"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
     "github.com/oracle/oci-go-sdk/v65/common/auth"
@@ -108,12 +109,37 @@ func escapeSecretContent(content string) string {
 	return strings.ReplaceAll(content, "'", "\\'")
 }
 
-func getCompartmentID(provider common.ConfigurationProvider) (string, error) {
-	// Use the default compartment ID available to the provider
-	compartmentID, err := provider.TenancyOCID()
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve compartment ID: %w", err)
+func getCompartmentID() (string, error) {
+	// Retrieve the Resource Principal Token (RPT) from the environment variable
+	token := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPT")
+	if token == "" {
+		return "", fmt.Errorf("OCI_RESOURCE_PRINCIPAL_RPT environment variable not set")
 	}
+
+	// Parse the JWT token
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (the second part of the JWT)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	// Parse the JSON payload into a map
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("failed to unmarshal JWT payload: %w", err)
+	}
+
+	// Extract the "compartmentId" claim
+	compartmentID, ok := claims["compartmentId"].(string)
+	if !ok {
+		return "", fmt.Errorf("compartmentId not found in token claims")
+	}
+
 	return compartmentID, nil
 }
 
@@ -127,7 +153,7 @@ func main() {
 		log.Fatalf("Error creating Resource Principal configuration: %v", err)
 	}
 
-	compartmentID, err := getCompartmentID(configProvider)
+	compartmentID, err := getCompartmentID()
 	if err != nil {
 		log.Fatalf("Failed to get compartment ID: %v", err)
 	}
