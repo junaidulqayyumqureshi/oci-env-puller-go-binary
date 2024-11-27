@@ -163,12 +163,6 @@ func getCompartmentID() (string, error) {
         return "", fmt.Errorf("failed to unmarshal JWT payload: %w", err)
     }
 
-    // *** Print the claims ***
-    for key, value := range claims {
-        fmt.Printf("%s: %v\n", key, value)
-    }
-
-    // Extract the "res_compartment" claim
     compartmentID, ok := claims["res_compartment"].(string)
     if !ok {
         return "", fmt.Errorf("res_compartment not found in token claims")
