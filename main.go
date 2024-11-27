@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "log"
+    "io/ioutil"
 	"os"
 	"strings"
 	"regexp"
@@ -119,7 +120,21 @@ func getCompartmentID() (string, error) {
 	// Parse the JWT token
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
+		fmt.Printf("Token below")
 		fmt.Printf(token)
+		fmt.Printf("Token above")
+
+		tokenBytes, err := ioutil.ReadFile(token)
+		if err != nil {
+			return "", fmt.Errorf("failed to read session token file: %w", err)
+		}
+
+		token2 := string(tokenBytes)
+
+		fmt.Printf("Token 2 ------")
+		fmt.Printf(token2)
+		fmt.Printf("Token 3 ------")
+
 		return "", fmt.Errorf("invalid JWT token format")
 	}
 
