@@ -136,9 +136,6 @@ func getCompartmentID() (string, error) {
     token = strings.TrimSpace(token)
 
     // *** Print the token ***
-    fmt.Println("Token:")
-    fmt.Println(token)
-    fmt.Println("**********")
 
     // Split the token into its three parts
     parts := strings.Split(token, ".")
@@ -159,9 +156,6 @@ func getCompartmentID() (string, error) {
     }
 
     // *** Print decoded payload ***
-    fmt.Println("Decoded Payload:")
-    fmt.Println(string(payloadBytes))
-    fmt.Println("**********")
 
     // Parse the JSON payload into a map
     var claims map[string]interface{}
@@ -170,11 +164,9 @@ func getCompartmentID() (string, error) {
     }
 
     // *** Print the claims ***
-    fmt.Println("Claims:")
     for key, value := range claims {
         fmt.Printf("%s: %v\n", key, value)
     }
-    fmt.Println("**********")
 
     // Extract the "res_compartment" claim
     compartmentID, ok := claims["res_compartment"].(string)
@@ -183,9 +175,6 @@ func getCompartmentID() (string, error) {
     }
 
     // *** Print the compartment ID ***
-    fmt.Println("Compartment ID:")
-    fmt.Println(compartmentID)
-    fmt.Println("**********")
 
     return compartmentID, nil
 }
