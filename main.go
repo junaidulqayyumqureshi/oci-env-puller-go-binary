@@ -111,30 +111,61 @@ func escapeSecretContent(content string) string {
 }
 
 func getCompartmentID() (string, error) {
-	// Retrieve the Resource Principal Token (RPT) from the environment variable
-	tokenPath := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPST")
-	tokenBytes, err := ioutil.ReadFile(tokenPath)
-	token := string(tokenBytes)
+    // Retrieve the Resource Principal Session Token (RPST) or its path from the environment variable
+    tokenOrPath := os.Getenv("OCI_RESOURCE_PRINCIPAL_RPST")
+    if tokenOrPath == "" {
+        return "", fmt.Errorf("OCI_RESOURCE_PRINCIPAL_RPST environment variable not set")
+    }
 
-	// Decode the payload (the second part of the JWT)
-	payload, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
-	}
+    var token string
 
-	// Parse the JSON payload into a map
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", fmt.Errorf("failed to unmarshal JWT payload: %w", err)
-	}
+    // Check if the environment variable contains a path or the token itself
+    if _, err := os.Stat(tokenOrPath); err == nil {
+        // It's a valid file path; read the token from the file
+        tokenBytes, err := ioutil.ReadFile(tokenOrPath)
+        if err != nil {
+            return "", fmt.Errorf("failed to read token file: %w", err)
+        }
+        token = string(tokenBytes)
+    } else {
+        // Assume it's the token itself
+        token = tokenOrPath
+    }
 
-	// Extract the "compartmentId" claim
-	compartmentID, ok := claims["compartmentId"].(string)
-	if !ok {
-		return "", fmt.Errorf("compartmentId not found in token claims")
-	}
+    // Clean up the token string
+    token = strings.TrimSpace(token)
 
-	return compartmentID, nil
+    // Split the token into its three parts
+    parts := strings.Split(token, ".")
+    if len(parts) != 3 {
+        return "", fmt.Errorf("invalid JWT token format: expected 3 parts, got %d", len(parts))
+    }
+
+    // Decode the payload (the second part of the JWT)
+    payloadSegment := parts[1]
+
+    // Add padding if necessary
+    missingPadding := (4 - len(payloadSegment)%4) % 4
+    payloadSegment += strings.Repeat("=", missingPadding)
+
+    payloadBytes, err := base64.URLEncoding.DecodeString(payloadSegment)
+    if err != nil {
+        return "", fmt.Errorf("failed to decode JWT payload: %w", err)
+    }
+
+    // Parse the JSON payload into a map
+    var claims map[string]interface{}
+    if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+        return "", fmt.Errorf("failed to unmarshal JWT payload: %w", err)
+    }
+
+    // Extract the "compartmentId" claim
+    compartmentID, ok := claims["compartmentId"].(string)
+    if !ok {
+        return "", fmt.Errorf("compartmentId not found in token claims")
+    }
+
+    return compartmentID, nil
 }
 
 func main() {
